@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HexBattle</title>
+  <style>
+    :root{--bg:#0f1720;--card:#0b1220;--accent:#60a5fa}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, sans-serif;background:var(--bg);color:#e6eef8}
+    #app{display:flex;gap:12px;padding:12px}
+    canvas {
+      background:linear-gradient(180deg,#0b1220,#07101a);
+      border-radius:8px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);
+      width: 900px;
+      height: 600px;
+    }
+    .sidebar{width:300px;padding:12px;background:linear-gradient(180deg,#071026, #051019);border-radius:8px}
+    h1{font-size:16px;margin:0 0 8px}
+    .unit-list{margin-top:8px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:6px;color:#d9eefc;cursor:pointer}
+    .small{font-size:13px;color:#9fb7d8}
+    .log{height:200px;overflow:auto;margin-top:8px;padding:8px;background:#05101a;border-radius:6px;border:1px solid rgba(255,255,255,0.02);font-size:13px}
+    .stat{display:flex;gap:6px;align-items:center;margin:6px 0}
+    .dot{width:14px;height:14px;border-radius:50%}
+	.game-over {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, #222, #000);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 2em;
+      animation: fadeIn 2s ease-in-out;
+      z-index: 9999;
+	}
+	
+	@keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    #debugInfo { position: fixed; right: 16px; bottom: 16px; background: rgba(0,0,0,0.45); padding: 8px; border-radius:6px; font-family:monospace; font-size:12px; color:#dff; z-index:999; }
+    #debugInfo,
+    #units,
+    #log {
+      display: none !important;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="startScreen" style="display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; height:100vh; background:#0f1720; color:white;">
+    <h1>HexBattle - Configuración</h1>
+    
+    <label>Modo de juego:
+      <select id="modeSelect" class="btn">
+        <option value="local">Local</option>
+        <option value="online">Online</option>
+      </select>
+    </label>
+    
+    <label>Escenario:
+      <select id="scenarioSelectStart" class="btn">
+        <option value="1">Escenario 1</option>
+        <option value="2">Escenario 2</option>
+        <option value="3">Escenario 3</option>
+        <option value="4">Escenario 4</option>
+        <option value="5">Escenario 5</option>
+        <option value="R">Escenario Aleatorio</option>
+      </select>
+    </label>
+    
+    <label id="aiConfig">Tipo de IA:
+      <select id="aiSelectStart" class="btn">
+        <option value="simple">IA Simple</option>
+        <option value="optimized">IA Optimizada</option>
+        <option value="aggressive">IA Agresiva</option>
+        <option value="ultraAggressive">IA Ultra Agresiva</option>
+      </select>
+    </label>
+    
+    <button id="startBtn" class="btn">Iniciar Partida</button>
+  </div>  
+  <div id="app" style="display:none;">
+    <canvas id="board" width="900" height="600"></canvas>
+    <div class="sidebar">
+      <div class="stat"><div class="dot" id="turnDot"></div> Turno: <strong id="turnText">Jugador 1</strong></div>
+      <div style="margin-top:8px">
+        
+        <button id="autoBtn" class="btn">Mover IA</button>
+        <button id="finTurno" class="btn">Fin turno</button>
+        <div style="margin-top:8px">
+          <label for="aiSelect" class="small" style="display:none;">Tipo de IA:</label>
+          <select id="aiSelect" class="btn" style="display:none;width:100%; margin-top:4px">
+            <option value="simple">IA Simple</option>
+            <option value="optimized">IA Optimizada</option>
+            <option value="aggressive">IA Agresiva</option>
+            <option value="ultraAggressive">IA Ultra Agresiva</option>
+          </select>
+        </div> 
+        <div style="margin-top:8px">
+          <label for="scenarioSelect" class="small" style="display:none;">Escenario:</label>
+          <select id="scenarioSelect" class="btn" style="display:none;width:100%; margin-top:4px">
+            <option value="1">Escenario 1</option>
+            <option value="2">Escenario 2</option>
+            <option value="3">Escenario 3</option>
+            <option value="4">Escenario 4</option>
+            <option value="5">Escenario 5</option>
+            <option value="R">Escenario Aleatorio</option>
+          </select>
+          <button id="randomBtn" class="btn" style="display:none;width:100%; margin-top:4px">Esc. Aleatorio</button>
+        </div>
+		
+		<button id="deshacerMov" class="btn">Deshacer Movimiento</button>	
+		<button id="finPartida" class="btn" style="display:none;">Fin partida</button>
+    <button onclick="descargarEscenario()">Descargar escenario</button>
+		<button id="toggleCoords" class="btn" style="display:none;">Mostrar/Ocultar coords</button>		
+      </div>
+      <h3 style="display:none;margin-top:12px" display="">Unidades</h3>
+      <div id="units" class="unit-list small"></div>
+      <h3 style="display:none;margin-top:12px">Registro</h3>
+      <div id="log" class="log"></div>
+      <h3 style="margin-top:12px">Tiradas de dados</h3>
+      <div id="diceLog" class="log"></div>
+      <button id="resetBtn" class="btn">Reiniciar partida</button>
+      <button id="backBtn" class="btn" style="margin-top:8px;">Volver</button>
+    </div>
+	<div id="gameOverAnimation" style="display:none;" class="game-over">
+	  <h1>¡Fin de la partida!</h1>
+	  <p>Gracias por jugar</p>
+	</div>
+  </div>
+
+   <div id="debugInfo" style="display:none;">
+   <div id="dbgMouse">mouse: -</div>
+   <div id="dbgAxial">axial: -</div>
+    <div id="dbgSelected">selected: -</div>
+  </div>
+
+  <audio id="sndShot" src="https://bigsoundbank.com/UPLOAD/ogg/0437.ogg"></audio>
+  <audio id="sndExplosion" src="https://bigsoundbank.com/UPLOAD/ogg/1807.ogg"></audio>
+
+<script>
+/* Versión integradora: tablero lleno 15x12, 5 escenarios fijos adaptados + aleatorio.
+   Mantengo la lógica original de unidades, IA, ataques, undo, etc. */
+
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const sndShot = document.getElementById('sndShot');
+const sndExplosion = document.getElementById('sndExplosion');
+
+let selected = null;
+let units = [];
+let terrain = [];
+let turn = 1;
+let history = []; // { id, fromQ, fromR, prevMoved, prevAtacado, prevActivado }
+let escenarioActual = null;
+
+const logEl = document.getElementById('log');
+const unitsEl = document.getElementById('units');
+const turnText = document.getElementById('turnText');
+const turnDot = document.getElementById('turnDot');
+
+const dbgMouse = document.getElementById('dbgMouse');
+const dbgAxial = document.getElementById('dbgAxial');
+const dbgSelected = document.getElementById('dbgSelected');
+let showCoords = true;
+
+// --- configuración tablero: hex pointy-top, pero dibujado con bucle offset para filas completas
+const HEX_SIZE = 40;           // ajustar si deseas hexes más grandes/pequeños
+const COLS_FULL = 12;         // 14 hex por fila (visible)
+const ROWS_FULL = 8;         // 12 filas visibles
+const ORIGIN = { x: 80, y: 60 };
+
+// Referencias
+const startScreen = document.getElementById("startScreen");
+const app = document.getElementById("app");
+const modeSelect = document.getElementById("modeSelect");
+const scenarioSelectStart = document.getElementById("scenarioSelectStart");
+const aiConfig = document.getElementById("aiConfig");
+const aiSelectStart = document.getElementById("aiSelectStart");
+const startBtn = document.getElementById("startBtn");
+
+// Mostrar/ocultar configuración de IA según modo
+modeSelect.addEventListener("change", ()=>{
+  aiConfig.style.display = (modeSelect.value === "local") ? "block" : "none";
+});
+
+// Iniciar partida
+startBtn.addEventListener("click", ()=>{
+  const mode = modeSelect.value;
+  const scenario = scenarioSelectStart.value;
+  const aiType = aiSelectStart.value;
+
+  // Guardamos configuración global
+  window.gameConfig = { mode, scenario, aiType };
+
+  // Ocultamos pantalla inicial y mostramos juego
+  startScreen.style.display = "none";
+  app.style.display = "flex";
+
+  // Seleccionar escenario y IA en la UI del juego
+  document.getElementById("scenarioSelect").value = scenario;
+  document.getElementById("aiSelect").value = aiType;
+
+  // Reiniciamos la partida
+  initGame();
+});
+
+
+const diceIcons = {
+  INF: "INF.png",
+  TANK: "TANK.png",
+  ART: "ART.png",
+  FLAG: "FLAG.png",
+  STAR: "STAR.png" // la que has adjuntado
+};
+
+function logDiceRoll(results) {
+  const diceLog = document.getElementById("diceLog");
+  const entry = document.createElement("div");
+  entry.style.display = "flex";
+  entry.style.gap = "4px";
+  entry.style.alignItems = "center";
+  entry.style.marginBottom = "4px";
+
+  results.forEach(face=>{
+    const img = document.createElement("img");
+    img.src = diceIcons[face] || "";
+    img.alt = face;
+    img.style.width = (HEX_SIZE*1.5) + "px";
+    img.style.height = (HEX_SIZE*1.5) + "px";
+    entry.appendChild(img);
+  });
+
+  diceLog.prepend(entry); // lo más reciente arriba
+}
+
+const DICE_FACES = ['INF','TANK','ART','STAR','FLAG','FLAG'];
+function rollDice(n){
+  const res = [];
+  for(let i=0;i<n;i++) res.push(DICE_FACES[Math.floor(Math.random()*DICE_FACES.length)]);
+  return res;
+}
+
+// conversiones axial <-> pixel (pointy top)
+function axialToPixel(q, r) {
+  const x = HEX_SIZE * Math.sqrt(3) * (q + r/2) + ORIGIN.x;
+  const y = HEX_SIZE * (3/2) * r + ORIGIN.y;
+  return { x, y };
+}
+
+function pixelToAxial(px,py){
+  const s3 = Math.sqrt(3);
+  const sx = (px - ORIGIN.x) / HEX_SIZE;
+  const sy = (py - ORIGIN.y) / HEX_SIZE;
+  // inversa:
+  const q = (sx / s3) - (sy / 3);
+  const r = (2/3) * sy;
+  return hexRound({q,r});
+}
+function hexRound({q,r}){
+  const x = q;
+  const z = r;
+  const y = -x - z;
+  let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+  const xDiff = Math.abs(rx - x), yDiff = Math.abs(ry - y), zDiff = Math.abs(rz - z);
+  if (xDiff > yDiff && xDiff > zDiff) rx = -ry - rz;
+  else if (yDiff > zDiff) ry = -rx - rz;
+  else rz = -rx - ry;
+  return { q: rx, r: rz };
+}
+
+// offset (col,row) <-> axial (odd-r)
+function offsetToAxial(col, row){
+  const q = col - Math.floor(row/2);
+  const r = row;
+  return {q,r};
+}
+function axialToOffset(q,r){
+  const col = q + Math.floor(r/2);
+  const row = r;
+  return {col,row};
+}
+
+// inBounds: comprobar dentro del rectángulo visible 15x12 (usando offset)
+function inBounds(q,r){
+  const off = axialToOffset(q,r);
+  return off.col >= 0 && off.col < COLS_FULL && off.row >= 0 && off.row < ROWS_FULL;
+}
+
+function neighbors(q,r,distancia){
+  if(distancia===1) {
+    return [{q:q+1,r:r},{q:q+1,r:r-1},{q:q,r:r-1},{q:q-1,r:r},{q:q-1,r:r+1},{q:q,r:r+1}];
+  }
+  const directions = [{q:1,r:0},{q:1,r:-1},{q:0,r:-1},{q:-1,r:0},{q:-1,r:1},{q:0,r:1}];
+  const result = new Set();
+  const walk = (steps) => {
+    const combs = [];
+    function rec(k, accQ, accR){
+      if(k===0){ combs.push({q:accQ,r:accR}); return; }
+      for(const d of directions) rec(k-1, accQ+d.q, accR+d.r);
+    }
+    rec(steps, 0, 0);
+    return combs;
+  };
+  for(let d=1; d<=distancia; d++){
+    const combs = walk(d);
+    for(const c of combs) result.add(`${q+c.q},${r+c.r}`);
+  }
+  return Array.from(result).map(s => { const [qq,rr]=s.split(',').map(Number); return {q:qq,r:rr}; });
+}
+
+// Unidad
+class Unit{
+  constructor(id, owner, type, q, r){
+    this.id = id; this.owner = owner; this.type = type; this.q = q; this.r = r;
+    if(type==='INF'){ this.strength=4; this.alcance=3; this.maximoMovimiento=2; }
+    if(type==='TANK'){ this.strength=3; this.alcance=3; this.maximoMovimiento=1; }
+    this.movidas=0; this.dadosMax=3; this.atacado=false; this.activado=false; this.moved=false;
+  }
+}
+
+function findUnitAt(q,r){ return units.find(u=>u.q===q && u.r===r && u.strength>0); }
+function findTerrainAt(q,r){ return terrain.find(t=>t.q===q && t.r===r); }
+
+function log(msg){
+  const p = document.createElement('div'); p.textContent = msg; logEl.prepend(p);
+}
+
+// --- escenarios fijos adaptados (coordenadas axiales dentro de 15x12) ---
+const scenarios = {
+  1: { units: [
+        {o:1,t:'INF',q:1,r:1}, {o:1,t:'INF',q:3,r:2}, {o:1,t:'TANK',q:2,r:0},
+        {o:2,t:'INF',q:8,r:8}, {o:2,t:'INF',q:10,r:9}, {o:2,t:'TANK',q:9,r:7}
+      ],
+      terrain: [
+        {q:5,r:4,type:'bosque'}, {q:6,r:5,type:'colina'}, {q:7,r:6,type:'rio'},
+        {q:7,r:7,type:'puente'}, {q:4,r:6,type:'obstaculo'}
+      ] },
+  2: { units: [
+        {o:1,t:'INF',q:0,r:2}, {o:1,t:'INF',q:2,r:3}, {o:1,t:'TANK',q:1,r:1},
+        {o:2,t:'INF',q:11,r:8}, {o:2,t:'INF',q:9,r:9}, {o:2,t:'TANK',q:10,r:7}
+      ],
+      terrain: [
+        {q:6,r:3,type:'colina'}, {q:5,r:5,type:'bosque'}, {q:8,r:6,type:'rio'}, {q:8,r:7,type:'puente'}
+      ] },
+  3: { units: [
+        {o:1,t:'INF',q:0,r:3}, {o:1,t:'INF',q:2,r:4}, {o:1,t:'TANK',q:1,r:2},
+        {o:2,t:'INF',q:11,r:7}, {o:2,t:'INF',q:9,r:8}, {o:2,t:'TANK',q:10,r:6}
+      ],
+      terrain: [
+        {q:4,r:2,type:'obstaculo'}, {q:6,r:3,type:'bosque'}, {q:7,r:5,type:'colina'}
+      ] },
+  4: { units: [
+        {o:1,t:'INF',q:3,r:3}, {o:1,t:'INF',q:5,r:2}, {o:1,t:'TANK',q:4,r:1},
+        {o:2,t:'INF',q:8,r:7}, {o:2,t:'INF',q:6,r:6}, {o:2,t:'TANK',q:7,r:5}
+      ],
+      terrain: [
+        {q:5,r:4,type:'rio'}, {q:5,r:5,type:'puente'}, {q:3,r:5,type:'colina'}
+      ] },
+  5: { units: [
+        {o:1,t:'INF',q:2,r:1}, {o:1,t:'INF',q:4,r:3}, {o:1,t:'TANK',q:3,r:2},
+        {o:2,t:'INF',q:9,r:5}, {o:2,t:'INF',q:7,r:7}, {o:2,t:'TANK',q:8,r:6}
+      ],
+      terrain: [
+        {q:6,r:2,type:'bosque'}, {q:6,r:3,type:'colina'}, {q:6,r:4,type:'rio'}, {q:6,r:5,type:'puente'}
+      ] }
+};
+
+// --- escenario aleatorio ---
+function randInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+function generateRandomScenario() {
+  const scenario = { units: [], terrain: [] };
+  const positions = new Set();
+
+  const placeUnit = (owner, type) => {
+    let q, r;
+    do {
+      const col = randInt(0, COLS_FULL-1);
+      const row = randInt(0, ROWS_FULL-1);
+      ({q,r} = offsetToAxial(col,row));
+    } while (positions.has(`${q},${r}`));
+    positions.add(`${q},${r}`);
+    scenario.units.push({ o: owner, t: type, q, r });
+  };
+
+  placeUnit(1,'INF'); placeUnit(1,'INF'); placeUnit(1,'TANK');
+  placeUnit(2,'INF'); placeUnit(2,'INF'); placeUnit(2,'TANK');
+
+  const terrainTypes = ['bosque','colina','rio','puente','obstaculo'];
+  const terrainCount = randInt(4,6);
+  for(let i=0;i<terrainCount;i++){
+    let q,r;
+    do {
+      const col = randInt(0,COLS_FULL-1);
+      const row = randInt(0,ROWS_FULL-1);
+      ({q,r} = offsetToAxial(col,row));
+    } while (positions.has(`${q},${r}`));
+    positions.add(`${q},${r}`);
+    scenario.terrain.push({q,r,type:terrainTypes[randInt(0,terrainTypes.length-1)]});
+  }
+
+  return scenario;
+}
+
+// --- dibujo de hex y tablero (llenado completo en bucle offset) ---
+function drawHex(q,r,fill=false,strokeStyle='rgba(255,255,255,0.04)'){
+  const p = axialToPixel(q,r);
+  const corners = [];
+  for(let i=0;i<6;i++){
+    const ang = Math.PI/180 * (60*i - 30);
+    corners.push({x: p.x + HEX_SIZE * Math.cos(ang), y: p.y + HEX_SIZE * Math.sin(ang)});
+  }
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x,corners[0].y);
+  for(let i=1;i<6;i++) ctx.lineTo(corners[i].x,corners[i].y);
+  ctx.closePath();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = strokeStyle;
+  ctx.stroke();
+  if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+
+  // Dibuja tablero lleno: iteramos por offset (col,row), convertimos a axial
+  for (let row = 0; row < ROWS_FULL; row++) {
+    for (let col = 0; col < COLS_FULL; col++) {
+      const {q, r} = offsetToAxial(col, row);
+      drawHex(q, r, false);
+      if (showCoords) {
+        const p = axialToPixel(q, r);
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillText(`${q},${r}`, p.x, p.y + 4);
+      }
+    }
+  }
+
+  // terreno
+  terrain.forEach(t=>{
+    const colors={bosque:'rgba(34,197,94,0.36)',colina:'rgba(234,179,8,0.32)',rio:'rgba(59,130,246,0.30)',puente:'rgba(245,158,11,0.28)',obstaculo:'rgba(148,163,184,0.28)'};
+    if(!inBounds(t.q,t.r)) return;
+    drawHex(t.q,t.r,colors[t.type],'rgba(255,255,255,0.1)');
+    const p = axialToPixel(t.q,t.r);
+    ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(t.type[0].toUpperCase(), p.x, p.y+3);
+  });
+
+  // unidades
+  units.forEach(u=>{
+    if(u.strength<=0) return;
+    if(!inBounds(u.q,u.r)) return;
+    const p = axialToPixel(u.q,u.r);
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,HEX_SIZE*0.45,0,Math.PI*2);
+    ctx.fillStyle = (u.owner===1)?'rgba(96,165,250,0.95)':'rgba(248,113,113,0.95)';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle='#fff';
+    ctx.font='bold 13px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(u.type[0], p.x, p.y-2);
+    ctx.font='11px sans-serif';
+    ctx.fillText(u.strength, p.x, p.y+12);
+  });
+
+  // seleccionado highlights
+  if(selected){
+    const u2 = findUnitAt(selected.q, selected.r);
+    let neigh = [];
+    if(u2){
+      if(u2.type==='INF') neigh = neighbors(selected.q, selected.r, 2);
+      if(u2.type==='TANK') neigh = neighbors(selected.q, selected.r, 3);
+    }
+    neigh.forEach(n=>{ if(inBounds(n.q,n.r)) drawHex(n.q,n.r,'rgba(96,165,250,0.06)','rgba(96,165,250,0.18)'); });
+    if(inBounds(selected.q, selected.r)) drawHex(selected.q, selected.r, 'rgba(96,165,250,0.08)','rgba(96,165,250,0.32)');
+  }
+}
+
+// Lógica clic
+canvas.addEventListener('click', e =>{
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const {q,r} = pixelToAxial(x,y);
+  dbgMouse.textContent = `mouse px=${x.toFixed(1)},py=${y.toFixed(1)}`;
+  dbgAxial.textContent = `axial -> q=${q}, r=${r}`;
+  if(!inBounds(q,r)) { log('Fuera de límites'); return; }
+  const u = findUnitAt(q,r);
+  log(`Click px=${x.toFixed(1)},py=${y.toFixed(1)} -> axial (${q},${r}) unit:${u?('P'+u.owner+' '+u.type):'none'}`);
+  if(selected === null){
+    if(u && u.owner===turn){ selected = u; log(`Seleccionado ${u.type} P${u.owner} en (${q},${r})`); dbgSelected.textContent = `sel: ${u.id} @${u.q},${u.r}`; }
+  } else {
+    if(u && u.owner===turn){ selected = u; log(`Cambio selección a ${u.type} P${u.owner} en (${q},${r})`); draw(); updateUI(); return; }
+    const enemy = u;
+    if(enemy && enemy.owner !== turn && isAdjacentATK(selected.q,selected.r,q,r, selected.type)){
+      if(resolveAttack(selected, enemy)!==0) { selected = null; endTurnIfNeeded(); }
+    } else if(!enemy && isAdjacentMOV(selected.q,selected.r,q,r,selected.type)){
+      if(moveUnit(selected,q,r)) log(`Movido ${selected.type} a (${q},${r})`);
+      selected = null;
+      endTurnIfNeeded();
+      checkGameOver();
+    } else {
+      log('Movimiento/ataque no válido');
+      selected = null;
+    }
+  }
+  updateUI(); draw();
+});
+
+function isAdjacentATK(q1,r1,q2,r2, tipoUnidad){
+  if(tipoUnidad==='INF') return neighbors(q1,r1,2).some(n=>n.q===q2 && n.r===r2);
+  if(tipoUnidad==='TANK') return neighbors(q1,r1,3).some(n=>n.q===q2 && n.r===r2);
+  return false;
+}
+function isAdjacentMOV(q1,r1,q2,r2, tipoUnidad){
+  if(tipoUnidad==='INF') return neighbors(q1,r1,2).some(n=>n.q===q2 && n.r===r2);
+  if(tipoUnidad==='TANK') return neighbors(q1,r1,1).some(n=>n.q===q2 && n.r===r2);
+  return false;
+}
+
+function getPenalizacion(att, def) {
+  let penal = 0;
+
+  // Penalización por distancia (INF)
+  if (att.type === 'INF') {
+    if (neighbors(att.q, att.r, 1).some(n => n.q === def.q && n.r === def.r)) {
+      penal += 0;
+    } else if (neighbors(att.q, att.r, 2).some(n => n.q === def.q && n.r === def.r)) {
+      penal += 1;
+    }
+  }
+
+  // Penalización adicional si el defensor está en bosque
+  const terrDef = findTerrainAt(def.q, def.r);
+  if (terrDef && terrDef.type === 'bosque') {
+    penal += 1;
+  }
+
+  return penal;
+}
+
+function celdaValida(q,r)
+{
+  if (!inBounds(q,r)) return false;
+  if (findUnitAt(q,r)) return false;
+  
+  const terr = findTerrainAt(q,r);
+    if(terr){
+      if(terr.type === 'rio' || terr.type === 'obstaculo')
+        return false;
+    }
+
+  return true;
+}
+
+function resolveAttack(att,def){
+  if (!def || att.owner === def.owner) {
+    log('Objetivo inválido: no se puede atacar a una unidad propia');
+    return 0;
+  }
+
+  if(!hasLineOfSight(att.q,att.r,def.q,def.r)){ log('Línea de visión bloqueada'); return 0; }
+  if(att.atacado){ log('Esta unidad ya ha atacado este turno'); return 0; }
+
+  att.atacado = true; att.moved = true; att.activado = true;
+  units.forEach(u=>{ if(u.owner===turn) u.moved=true; });
+
+  const vPenalizacion = getPenalizacion(att,def);
+  animateAttack(att,def,()=>{
+    const dice = rollDice(Math.max(0, att.dadosMax - vPenalizacion));
+    logDiceRoll(dice);
+    const hitSymbol = def.type.toUpperCase();
+    const hits = dice.filter(d=>(d===hitSymbol || d==='STAR')).length;
+    def.strength = Math.max(0, def.strength - hits);
+    log(`Ataque -> dados [${dice.join(',')}] hits:${hits} fuerza restante:${def.strength}`);
+
+    const retirada = dice.filter(d=>(d==='ART')).length;
+
+    if (def.type==='INF' && def.strength!=0 && retirada>0)
+    {
+      for(let i=0;i<retirada;i++){
+        if (celdaValida(def.q-1,def.r))
+      def.q = def.q-1;
+    else
+    if (celdaValida(def.q,def.r-1))
+      def.r = def.r-1;
+    else
+      def.strength= def.strength -1;
+      }
+    }
+
+    history = [];
+    updateUndoButton();
+
+    updateUI(); draw();
+
+    checkGameOver();
+  });
+  return 1;
+}
+
+function animateAttack(att,def,callback){
+  const start = axialToPixel(att.q,att.r);
+  const end = axialToPixel(def.q,def.r);
+  let t = 0;
+  if(sndShot) { sndShot.currentTime = 0; sndShot.play(); }
+  function step(){
+    t += 0.08;
+    draw();
+    ctx.strokeStyle='yellow'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(start.x,start.y);
+    ctx.lineTo(start.x + (end.x-start.x)*t, start.y + (end.y-start.y)*t);
+    ctx.stroke();
+    if(t < 1) requestAnimationFrame(step);
+    else { 
+      if(sndExplosion){ sndExplosion.currentTime = 0; sndExplosion.play(); } 
+      drawExplosion(end.x,end.y,callback);
+    }
+  }
+  step();
+}
+
+function drawExplosion(x,y,callback){
+  let radius = 5; let alpha = 1;
+  function frame(){
+    draw();
+    ctx.beginPath();
+    ctx.arc(x,y,radius,0,Math.PI*2);
+    ctx.fillStyle = `rgba(255,215,0,${alpha})`;
+    ctx.fill();
+    radius += 3; alpha -= 0.05;
+    if(alpha > 0) requestAnimationFrame(frame); else callback();
+  }
+  frame();
+}
+
+// movimiento con historial para deshacer
+function moveUnit(unit, q, r){
+  const terr = findTerrainAt(q,r);
+  if(terr){
+    if(terr.type === 'rio'){ log('No se puede mover a río'); return false; }
+    if(terr.type === 'obstaculo'){ log('Movimiento bloqueado por obstáculo'); return false; }
+  }
+  if(findUnitAt(q,r)) return false;
+  if(unit.moved){ log('Esta unidad ya ha movido'); return false; }
+
+  history.push({
+    id: unit.id,
+    fromQ: unit.q,
+    fromR: unit.r,
+    prevMoved: unit.moved,
+    prevAtacado: unit.atacado,
+    prevActivado: unit.activado
+  });
+
+  if(hexDistance(q,r,unit.q,unit.r) === 2) unit.atacado = true;
+  unit.q = q;
+  unit.r = r;
+  unit.moved = true;
+  unit.activado = true;
+
+  updateUndoButton();
+
+  return true;
+}
+
+function undoMove(){
+  if(history.length === 0){
+    log('No hay movimientos para deshacer.');
+    return;
+  }
+
+  updateUndoButton();
+
+  const last = history.pop();
+  const u = units.find(x => x.id === last.id);
+
+  if(!u){
+    log(`No se puede deshacer: la unidad ${last.id} ya no existe.`);
+    updateUI(); draw();
+    return;
+  }
+
+  u.q = last.fromQ;
+  u.r = last.fromR;
+  u.moved = !!last.prevMoved;
+  u.atacado = !!last.prevAtacado;
+  u.activado = !!last.prevActivado;
+
+  log(`Movimiento deshecho para unidad ${u.id} (restaurada a ${u.q},${u.r})`);
+  updateUI();
+  draw();
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('deshacerMov');
+  btn.disabled = history.length === 0;
+  btn.style.opacity = btn.disabled ? 0.5 : 1;
+  btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+}
+
+function hexDistance(q1, r1, q2, r2) {
+  const dq = q1 - q2;
+  const dr = r1 - r2;
+  const ds = (-q1 - r1) - (-q2 - r2);
+  return (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
+}
+
+function hasLineOfSight(q1,r1,q2,r2){
+  const N = hexDistance(q1,r1,q2,r2);
+  let cq = q1, cr = r1;
+  for(let i=0;i<N-1;i++){
+    const step = stepToward(cq,cr,q2,r2);
+    cq = step.q; cr = step.r;
+    const t = findTerrainAt(cq,cr);
+    if(t && t.type === 'bosque') return false;
+  }
+  return true;
+}
+
+function stepToward(q1,r1,q2,r2){
+  const dirs = neighbors(0,0,1);
+  let best = {q:q1, r:r1}, bestDist = 1e9;
+  dirs.forEach(d => {
+    const nq = q1 + d.q, nr = r1 + d.r;
+    const dist = hexDistance(nq, nr, q2, r2);
+    if(dist < bestDist){ bestDist = dist; best = {q:nq, r:nr}; }
+  });
+  return best;
+}
+
+function hasEnemiesInRange(u) {
+  if (u.strength <= 0) return false;
+  if (u.alcance <= 0) return false;
+
+  return units.some(enemy => {
+    if (enemy.owner === u.owner || enemy.strength <= 0) return false;
+    const dist = hexDistance(u.q, u.r, enemy.q, enemy.r);
+    return dist <= u.alcance;
+  });
+}
+
+function forceEndTurn() {
+  turn = (turn === 1) ? 2 : 1;
+  history = [];
+  units.forEach(u => {
+    if (u.owner === turn) {
+      u.moved = false;
+      u.atacado = false;
+      u.activado = false;
+    }
+  });
+  log(`Cambio de turno -> Jugador ${turn}`);
+  updateUndoButton();
+  updateUI();
+  draw();
+  checkGameOver();
+}
+
+// más cercano
+const nearestTarget = (enemies, unit) =>
+  enemies.reduce((best,e)=> hexDistance(unit.q,unit.r,e.q,e.r) < hexDistance(unit.q,unit.r,best.q,best.r) ? e : best);
+
+// más débil
+const weakestTarget = (enemies, unit) =>
+  enemies.reduce((best,e)=> e.strength < best.strength ? e : best);
+
+// más aislado
+const isolatedTarget = (enemies, unit) =>
+  enemies.reduce((best,e)=> {
+    const neighCount = enemies.filter(x => hexDistance(e.q,e.r,x.q,x.r) <= 1).length;
+    const bestCount = enemies.filter(x => hexDistance(best.q,best.r,x.q,x.r) <= 1).length;
+    return neighCount < bestCount ? e : best;
+  });
+
+
+async function unifiedAI(targetSelection) {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  // --- FASE 1: Mover todas las unidades ---
+  for (const u of myUnits) {
+    if (u.moved) continue;
+
+    // Selección de objetivo según estrategia
+    let enemies = units.filter(e => e.owner !== turn && e.strength > 0);
+    if (enemies.length === 0) continue;
+    let target = targetSelection(enemies, u);
+
+    // Calcular posibles movimientos
+    const maxMove = u.type === 'TANK' ? 1 : 2;
+    let candidates = neighbors(u.q, u.r, maxMove)
+      .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+
+    // Evaluar penalización + distancia
+    candidates.forEach(c => {
+      c.dist = hexDistance(c.q, c.r, target.q, target.r);
+      c.penal = getPenalizacion(u, target);
+    });
+
+    // Ordenar: menos penalización, luego más cerca del objetivo
+    candidates.sort((a,b) => a.penal - b.penal || a.dist - b.dist);
+
+    if (candidates.length > 0) {
+      moveUnit(u, candidates[0].q, candidates[0].r);
+      draw(); updateUI();
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  // --- FASE 2: Atacar con todas las unidades ---
+  for (const u of myUnits) {
+    if (u.atacado) continue;
+
+    // Buscar enemigos en rango actualizados tras movimientos/retiros
+    let enemiesInRange = units.filter(e =>
+      e.owner !== turn &&
+      e.strength > 0 &&
+      hexDistance(u.q,u.r,e.q,e.r) <= u.alcance
+    );
+
+    if (enemiesInRange.length === 0) continue;
+
+    // Seleccionar el enemigo más prioritario en este instante
+    let target = targetSelection(enemiesInRange, u);
+
+    if (target) {
+      await new Promise(resolve => {
+        resolveAttack(u, target);   // aquí el objetivo puede retirarse
+        setTimeout(resolve, 400);   // espera un poco antes del siguiente ataque
+      });
+    }
+  }
+
+
+  log('IA ha completado su turno');
+  forceEndTurn();
+}
+
+
+// IA simple y otras variantes (mantengo tus versiones, adaptadas para usar inBounds)
+function simpleAI(){
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+  myUnits.forEach(u=>{
+    const adj = neighbors(u.q,u.r,1).filter(n=>inBounds(n.q,n.r));
+    const enemyAdj = adj.map(n=>findUnitAt(n.q,n.r)).find(x=>x && x.owner !== turn);
+    if(enemyAdj){ resolveAttack(u, enemyAdj); return; }
+    const enemies = units.filter(x=>x.owner!==turn && x.strength>0);
+    if(enemies.length === 0) return;
+    let best = null, bestDist = 1e9;
+    enemies.forEach(e => { const d = hexDistance(u.q,u.r,e.q,e.r); if(d < bestDist){ bestDist = d; best = e; } });
+    if(best){
+      const cand = neighbors(u.q,u.r,1).filter(n=>inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+      cand.sort((a,b)=> hexDistance(a.q,a.r,best.q,best.r) - hexDistance(b.q,b.r,best.q,best.r));
+      if(cand.length) moveUnit(u,cand[0].q,cand[0].r);
+    }
+  });
+  log('IA ha realizado sus acciones');
+  forceEndTurn();
+}
+
+async function simpleAIOptimized() {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  for (const u of myUnits) {
+    if (u.moved) continue;
+    const enemies = units.filter(e => e.owner !== turn && e.strength > 0);
+    if (enemies.length === 0) continue;
+
+    let best = null, bestDist = 1e9;
+    enemies.forEach(e => {
+      const d = hexDistance(u.q,u.r,e.q,e.r);
+      if (d < bestDist) { bestDist = d; best = e; }
+    });
+
+    if (best) {
+      const maxMove = u.type === 'TANK' ? 1 : 2;
+      const cand = neighbors(u.q,u.r, maxMove)
+                    .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+      if (cand.length > 0) {
+        cand.sort((a,b) => hexDistance(a.q,a.r,best.q,best.r) - hexDistance(b.q,b.r,best.q,best.r));
+        moveUnit(u, cand[0].q, cand[0].r);
+        draw(); updateUI();
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+  }
+
+  log('IA ha completado su turno');
+  forceEndTurn();
+}
+
+async function simpleAIStrategic() {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  for (const u of myUnits) {
+    if (u.moved) continue;
+    const infEnemies = units
+      .filter(e => e.owner !== turn && e.strength > 0 && e.type === 'INF')
+      .sort((a,b) => a.strength - b.strength);
+
+    let target = null;
+    if (infEnemies.length > 0) {
+      let bestDist = 1e9;
+      infEnemies.forEach(e => {
+        const d = hexDistance(u.q, u.r, e.q, e.r);
+        if (d < bestDist) { bestDist = d; target = e; }
+      });
+    } else {
+      const otherEnemies = units.filter(e => e.owner !== turn && e.strength > 0);
+      if (otherEnemies.length > 0) {
+        let bestDist = 1e9;
+        otherEnemies.forEach(e => {
+          const d = hexDistance(u.q, u.r, e.q, e.r);
+          if (d < bestDist) { bestDist = d; target = e; }
+        });
+      }
+    }
+
+    if (target) {
+      const maxMove = u.type === 'TANK' ? 1 : 2;
+      const cand = neighbors(u.q, u.r, maxMove)
+                    .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+      if (cand.length > 0) {
+        cand.sort((a,b) => hexDistance(a.q,a.r,target.q,target.r) - hexDistance(b.q,b.r,target.q,target.r));
+        moveUnit(u, cand[0].q, cand[0].r);
+        draw(); updateUI();
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+  }
+
+  for (const u of myUnits) {
+    if (u.atacado) continue;
+
+    const enemiesInRange = units
+      .filter(e => e.owner !== turn && e.strength > 0 && hexDistance(u.q, u.r, e.q, e.r) <= u.alcance)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      });
+
+    if (enemiesInRange.length > 0) {
+      await new Promise(resolve => {
+        resolveAttack(u, enemiesInRange[0]);
+        setTimeout(resolve, 500);
+      });
+    }
+  }
+
+  log('IA estratégica ha completado su turno');
+  forceEndTurn();
+}
+
+async function smartAIStrategic() {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  for (const u of myUnits) {
+    if (u.moved) continue;
+
+    const infEnemies = units
+      .filter(e => e.owner !== turn && e.strength > 0 && e.type === 'INF')
+      .sort((a,b) => a.strength - b.strength);
+
+    let target = null;
+    if (infEnemies.length > 0) {
+      let bestDist = 1e9;
+      infEnemies.forEach(e => {
+        const d = hexDistance(u.q, u.r, e.q, e.r);
+        if (d < bestDist) { bestDist = d; target = e; }
+      });
+    } else {
+      const otherEnemies = units.filter(e => e.owner !== turn && e.strength > 0);
+      if (otherEnemies.length > 0) {
+        let bestDist = 1e9;
+        otherEnemies.forEach(e => {
+          const d = hexDistance(u.q, u.r, e.q, e.r);
+          if (d < bestDist) { bestDist = d; target = e; }
+        });
+      }
+    }
+
+    if (target) {
+      const maxMove = u.type === 'TANK' ? 1 : 2;
+      const candidates = neighbors(u.q, u.r, maxMove)
+        .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+
+      candidates.forEach(c => {
+        c.risk = units
+          .filter(e => e.owner !== turn && e.strength > 0)
+          .filter(e => hexDistance(c.q,c.r,e.q,e.r) <= e.alcance)
+          .length;
+        c.distToTarget = hexDistance(c.q,c.r,target.q,target.r);
+      });
+
+      candidates.sort((a,b) => a.risk - b.risk || a.distToTarget - b.distToTarget);
+
+      if (candidates.length > 0) {
+        moveUnit(u, candidates[0].q, candidates[0].r);
+        draw(); updateUI();
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+  }
+
+  for (const u of myUnits) {
+    if (u.atacado) continue;
+
+    const enemiesInRange = units
+      .filter(e => e.owner !== turn && e.strength > 0 && hexDistance(u.q, u.r, e.q, e.r) <= u.alcance)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      });
+
+    if (enemiesInRange.length > 0) {
+      await new Promise(resolve => {
+        resolveAttack(u, enemiesInRange[0]);
+        setTimeout(resolve, 500);
+      });
+    }
+  }
+
+  log('IA táctica avanzada ha completado su turno');
+  forceEndTurn();
+}
+
+async function smartAICoordinated() {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  for (const u of myUnits) {
+    if (u.moved) continue;
+
+    let target = units
+      .filter(e => e.owner !== turn && e.strength > 0)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      })[0];
+
+    if (!target) continue;
+
+    const maxMove = u.type === 'TANK' ? 1 : 2;
+    let candidates = neighbors(u.q,u.r,maxMove)
+      .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+
+    candidates.forEach(c => {
+      c.risk = units
+        .filter(e => e.owner !== turn && e.strength > 0)
+        .filter(e => hexDistance(c.q,c.r,e.q,e.r) <= e.alcance)
+        .length;
+      c.distToTarget = hexDistance(c.q,c.r,target.q,target.r);
+    });
+
+    candidates.sort((a,b) => a.risk - b.risk || a.distToTarget - b.distToTarget);
+
+    if (candidates.length > 0) {
+      moveUnit(u, candidates[0].q, candidates[0].r);
+      draw(); updateUI();
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  let attackMade = true;
+  while (attackMade) {
+    attackMade = false;
+    const attackers = myUnits.filter(u => !u.atacado && u.strength > 0);
+
+    for (const u of attackers) {
+      const enemiesInRange = units
+        .filter(e => e.owner !== turn && e.strength > 0 && hexDistance(u.q,u.r,e.q,e.r) <= u.alcance)
+        .sort((a,b) => {
+          if (a.type === 'INF' && b.type !== 'INF') return -1;
+          if (a.type !== 'INF' && b.type === 'INF') return 1;
+          if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+          return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+        });
+
+      if (enemiesInRange.length > 0) {
+        await new Promise(resolve => {
+          resolveAttack(u, enemiesInRange[0]);
+          attackMade = true;
+          setTimeout(resolve, 500);
+        });
+        break;
+      }
+    }
+  }
+
+  log('IA coordinada ha completado su turno');
+  forceEndTurn();
+}
+
+async function aggressiveAI() {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  for (const u of myUnits) {
+    if (u.moved) continue;
+
+    let target = units
+      .filter(e => e.owner !== turn && e.strength > 0)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        const aAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(a.q,a.r,x.q,x.r) <= 1).length === 1;
+        const bAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(b.q,b.r,x.q,x.r) <= 1).length === 1;
+        if (aAlone && !bAlone) return -1;
+        if (!aAlone && bAlone) return 1;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      })[0];
+
+    if (!target) continue;
+
+    const maxMove = u.type === 'TANK' ? 1 : 2;
+    let candidates = neighbors(u.q,u.r,maxMove)
+      .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+
+    candidates.forEach(c => {
+      c.risk = units
+        .filter(e => e.owner !== turn && e.strength > 0)
+        .filter(e => hexDistance(c.q,c.r,e.q,e.r) <= e.alcance)
+        .length;
+      c.distToTarget = hexDistance(c.q,c.r,target.q,target.r);
+    });
+
+    candidates.sort((a,b) => a.risk - b.risk || a.distToTarget - b.distToTarget);
+
+    if (candidates.length > 0) {
+      moveUnit(u, candidates[0].q, candidates[0].r);
+      draw(); updateUI();
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  let attackMade = true;
+  while (attackMade) {
+    attackMade = false;
+    const attackers = myUnits.filter(u => !u.atacado && u.strength > 0);
+
+    for (const u of attackers) {
+      const enemiesInRange = units
+        .filter(e => e.owner !== turn && e.strength > 0 && hexDistance(u.q,u.r,e.q,e.r) <= u.alcance)
+        .sort((a,b) => {
+          if (a.type === 'INF' && b.type !== 'INF') return -1;
+          if (a.type !== 'INF' && b.type === 'INF') return 1;
+          if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+          const aAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(a.q,a.r,x.q,x.r) <= 1).length === 1;
+          const bAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(b.q,b.r,x.q,x.r) <= 1).length === 1;
+          if (aAlone && !bAlone) return -1;
+          if (!aAlone && bAlone) return 1;
+          return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+        });
+
+      if (enemiesInRange.length > 0) {
+        await new Promise(resolve => {
+          resolveAttack(u, enemiesInRange[0]);
+          attackMade = true;
+          setTimeout(resolve, 500);
+        });
+        break;
+      }
+    }
+  }
+
+  log('IA agresiva ha completado su turno');
+  endTurnIfNeeded();
+  checkGameOver();
+  updateUI();
+  draw();
+}
+
+async function ultraAggressiveAI() {
+  const myUnits = units.filter(u => u.owner === turn && u.strength > 0);
+
+  for (const u of myUnits) {
+    if (u.strength <= 0) continue;
+
+    let enemiesInRange = units
+      .filter(e => e.owner !== turn && e.strength > 0 && hexDistance(u.q,u.r,e.q,e.r) <= u.alcance)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        const aAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(a.q,a.r,x.q,x.r) <= 1).length === 1;
+        const bAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(b.q,b.r,x.q,x.r) <= 1).length === 1;
+        if (aAlone && !bAlone) return -1;
+        if (!aAlone && bAlone) return 1;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      });
+
+    if (enemiesInRange.length > 0 && !u.atacado) {
+      await new Promise(resolve => {
+        resolveAttack(u, enemiesInRange[0]);
+        setTimeout(resolve, 400);
+      });
+      continue;
+    }
+
+    let target = units
+      .filter(e => e.owner !== turn && e.strength > 0)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        const aAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(a.q,a.r,x.q,x.r) <= 1).length === 1;
+        const bAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(b.q,b.r,x.q,x.r) <= 1).length === 1;
+        if (aAlone && !bAlone) return -1;
+        if (!aAlone && bAlone) return 1;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      })[0];
+
+    if (!target) continue;
+
+    const maxMove = u.type === 'TANK' ? 1 : 2;
+    let candidates = neighbors(u.q,u.r,maxMove)
+      .filter(n => inBounds(n.q,n.r) && !findUnitAt(n.q,n.r));
+
+    candidates.forEach(c => {
+      c.risk = units
+        .filter(e => e.owner !== turn && e.strength > 0)
+        .filter(e => hexDistance(c.q,c.r,e.q,e.r) <= e.alcance)
+        .length;
+      c.distToTarget = hexDistance(c.q,c.r,target.q,target.r);
+    });
+
+    candidates.sort((a,b) => a.distToTarget - b.distToTarget || a.risk - b.risk);
+
+    if (candidates.length > 0) {
+      moveUnit(u, candidates[0].q, candidates[0].r);
+      draw(); updateUI();
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    enemiesInRange = units
+      .filter(e => e.owner !== turn && e.strength > 0 && hexDistance(u.q,u.r,e.q,e.r) <= u.alcance)
+      .sort((a,b) => {
+        if (a.type === 'INF' && b.type !== 'INF') return -1;
+        if (a.type !== 'INF' && b.type === 'INF') return 1;
+        if (a.type === 'INF' && b.type === 'INF') return a.strength - b.strength;
+        const aAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(a.q,a.r,x.q,x.r) <= 1).length === 1;
+        const bAlone = units.filter(x => x.owner !== turn && x.strength > 0 && hexDistance(b.q,b.r,x.q,x.r) <= 1).length === 1;
+        if (aAlone && !bAlone) return -1;
+        if (!aAlone && bAlone) return 1;
+        return hexDistance(u.q,u.r,a.q,a.r) - hexDistance(u.q,u.r,b.q,b.r);
+      });
+
+    if (enemiesInRange.length > 0 && !u.atacado) {
+      await new Promise(resolve => {
+        resolveAttack(u, enemiesInRange[0]);
+        setTimeout(resolve, 400);
+      });
+    }
+  }
+
+  log('IA ultra agresiva ha completado su turno');
+  forceEndTurn();
+}
+
+// endTurn logic
+function endTurnIfNeededSIMPLE(){
+  turn = (turn===1)?2:1;
+  history = [];
+  units.forEach(u=>{ if(u.owner===turn) u.moved=false; u.atacado = false; u.activado = false; });
+  log(`Cambio de turno -> Jugador ${turn}`);
+  updateUndoButton();
+  updateUI(); draw();
+}
+
+function endTurnIfNeeded() {
+  let vTodosMov = true;
+  let vTieneATiro = false;
+
+  units.forEach(u => {
+    if (u.owner === turn && !u.moved) vTodosMov = false;
+  });
+
+  if (vTodosMov) {
+    log('Fase de ataque');
+
+    units.forEach(u => {
+      if (u.owner === turn && !u.atacado && hasEnemiesInRange(u)) {
+        vTieneATiro = true;
+      }
+    });
+
+    if (!vTieneATiro) {
+      turn = (turn === 1) ? 2 : 1;
+
+      units.forEach(u => {
+        if (u.owner === turn) {
+          u.moved = false;
+          u.atacado = false;
+          u.activado = false;
+        }
+      });
+
+      log(`Cambio de turno -> Jugador ${turn}`);
+      history = [];
+      updateUndoButton();
+      updateUI();
+      draw();
+    }
+  }
+
+  return !vTodosMov || vTieneATiro;
+}
+
+// UI y helpers
+function updateUI(){
+  turnText.textContent = (turn===1)? 'Jugador 1' : 'Jugador 2';
+  turnDot.style.background = (turn===1)? '#60a5fa' : '#f87171';
+  unitsEl.innerHTML = '';
+  units.forEach(u=>{
+    const div = document.createElement('div');
+    div.className='small';
+    div.textContent = `#${u.id} - P${u.owner} ${u.type} [${u.strength}] at (${u.q},${u.r}) moved:${u.moved}`;
+    unitsEl.appendChild(div);
+  });
+}
+
+// initGame: carga escenario seleccionado (1..5 o 'R')
+function initGame(){
+  units = [];
+  terrain = [];
+  selected = null;
+  turn = 1;
+  history = [];
+
+  document.getElementById("diceLog").innerHTML = "";
+
+  document.getElementById("backBtn").addEventListener("click", ()=>{
+  volver();
+});
+  
+  const id = ()=>Math.random().toString(36).slice(2,9);
+
+  const scenarioVal = document.getElementById('scenarioSelect').value;
+  let scenarioData;
+  if(scenarioVal === 'R') 
+  {
+      if (escenarioActual == null)
+      {
+        scenarioData = generateRandomScenario();
+        escenarioActual=scenarioData;
+      }
+      else
+       scenarioData = escenarioActual;
+  }
+  else scenarioData = scenarios[parseInt(scenarioVal)];
+
+  // añadir unidades (solo si inBounds)
+  scenarioData.units.forEach(u=>{
+    if(inBounds(u.q,u.r)) units.push(new Unit(id(), u.o, u.t, u.q, u.r));
+  });
+
+  // terreno dentro de bounds
+  terrain = scenarioData.terrain.filter(t=>inBounds(t.q,t.r)).map(t=>({...t}));
+
+  updateUndoButton();
+  updateUI();
+  draw();
+  log(`Partida iniciada en Escenario ${scenarioVal === 'R' ? 'Aleatorio' : scenarioVal}`);
+}
+
+function descargarEscenario() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(escenarioActual));
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    a.setAttribute("download", "escenario.json");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+// eventos y botones
+canvas.addEventListener('mousemove', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const a = pixelToAxial(x,y);
+  dbgMouse.textContent = `mouse px=${x.toFixed(1)},py=${y.toFixed(1)}`;
+  dbgAxial.textContent = `axial -> q=${a.q}, r=${a.r}`;
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{ initGame(); });
+
+document.getElementById('autoBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('autoBtn');
+  btn.disabled = true;
+  const aiType = document.getElementById('aiSelect').value;
+  try {
+    switch(aiType){
+      case 'simple': await unifiedAI(nearestTarget); break;
+      case 'optimized': await unifiedAI(weakestTarget); break;
+      case 'aggressive': await unifiedAI(isolatedTarget); break;
+      case 'ultraAggressive': await unifiedAI(e => weakestTarget(e)); break;
+    }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function volver(){
+  escenarioActual = null;
+  // Ocultar juego
+  document.getElementById("app").style.display = "none";
+  // Mostrar pantalla inicial
+  document.getElementById("startScreen").style.display = "flex";
+}
+
+document.getElementById('finTurno').addEventListener('click', ()=>{ endTurnIfNeededSIMPLE(); updateUI(); draw(); });
+document.getElementById('deshacerMov').addEventListener('click', ()=>{ undoMove(); updateUI(); draw(); });
+document.getElementById('finPartida').addEventListener('click', ()=> showGameOverAnimation());
+document.getElementById('toggleCoords').addEventListener('click', ()=>{ showCoords = !showCoords; draw(); });
+
+document.getElementById('scenarioSelect').addEventListener('change', ()=> initGame());
+document.getElementById('randomBtn').addEventListener('click', ()=>{
+document.getElementById('scenarioSelect').value = 'R';
+
+document.getElementById("debugInfo").style.display = "none";
+document.getElementById("units").style.display = "none";
+document.getElementById("log").style.display = "none";
+
+  initGame();
+});
+
+function checkGameOver() {
+  const p1Alive = units.some(u => u.owner === 1 && u.strength > 0);
+  const p2Alive = units.some(u => u.owner === 2 && u.strength > 0);
+
+  if (!p1Alive || !p2Alive) {
+    const winner = p1Alive ? 'Jugador 1' : 'Jugador 2';
+    log(`¡Fin de la partida! Ganador: ${winner}`);
+    showGameOverAnimation();
+    return true;
+  }
+  return false;
+}
+
+// overlay fin de partida
+function showGameOverAnimation(){
+  const el = document.getElementById('gameOverAnimation'); 
+  el.style.display = 'flex';
+  el.style.pointerEvents = 'auto';
+  setTimeout(()=> {
+    el.style.display = 'none';
+  }, 5000);
+}
+
+// iniciar con escenario por defecto
+initGame();
+
+</script>
+</body>
+</html>

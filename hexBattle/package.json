@@ -1,0 +1,15 @@
+{
+  "name": "hexbattle-server",
+  "version": "1.0.0",
+  "main": "api/server.js",
+  "scripts": {
+    "start": "node api/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.8.0",
+    "mysql2": "^3.2.0",
+    "uuid": "^9.0.0",
+    "dotenv": "^16.0.0"
+  }
+}
