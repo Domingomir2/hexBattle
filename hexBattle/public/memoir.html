@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Memoir44 Online REST</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #eee; margin: 0; padding: 20px; }
+    .btn { padding: 6px 12px; margin: 4px; border-radius: 4px; border: 1px solid #888; background: #333; color: #eee; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>Memoir44 Online</h1>
+    <label>Modo:
+      <select id="modeSelect">
+        <option value="local">Local</option>
+        <option value="online">Online</option>
+      </select>
+    </label><br>
+    <label>Escenario:
+      <select id="scenarioSelectStart">
+        <option value="1">Escenario 1</option>
+        <option value="2">Escenario 2</option>
+      </select>
+    </label><br>
+    <label id="usernameLabel" style="display:none;">Nombre de usuario:
+      <input id="usernameInput" placeholder="Tu nombre">
+    </label><br>
+    <button id="startBtn" class="btn">Empezar</button>
+  </div>
+
+  <div id="lobbyScreen" style="display:none;">
+    <h2>Lobby</h2>
+    <div id="lobbyList"></div>
+    <p>Esperando emparejamiento...</p>
+  </div>
+
+  <div id="gameScreen" style="display:none;">
+    <h2>Partida</h2>
+    <pre id="gameState"></pre>
+    <button id="endTurnBtn" class="btn">Finalizar turno</button>
+  </div>
+
+  <script>
+    const startScreen = document.getElementById("startScreen");
+    const lobbyScreen = document.getElementById("lobbyScreen");
+    const gameScreen = document.getElementById("gameScreen");
+    const modeSelect = document.getElementById("modeSelect");
+    const usernameLabel = document.getElementById("usernameLabel");
+    const usernameInput = document.getElementById("usernameInput");
+    const scenarioSelectStart = document.getElementById("scenarioSelectStart");
+    const lobbyList = document.getElementById("lobbyList");
+    const startBtn = document.getElementById("startBtn");
+    const gameStateDiv = document.getElementById("gameState");
+    const endTurnBtn = document.getElementById("endTurnBtn");
+
+    let myUsername = null;
+    let myScenario = null;
+    let myMatchUuid = null;
+    let myPlayerNumber = null;
+    let pollIntervalLobby = null;
+    let pollIntervalMatch = null;
+
+    modeSelect.addEventListener("change", ()=>{
+      usernameLabel.style.display = (modeSelect.value === "online") ? "block" : "none";
+    });
+
+    startBtn.addEventListener("click", async ()=>{
+      const mode = modeSelect.value;
+      myScenario = scenarioSelectStart.value;
+      if(mode === "online"){
+        myUsername = usernameInput.value || "anon";
+        startScreen.style.display = "none";
+        lobbyScreen.style.display = "block";
+        // Join lobby
+        await fetch("/api/lobby", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ username: myUsername, scenario: myScenario })
+        });
+        // Start polling lobby
+        pollIntervalLobby = setInterval(updateLobby, 3000);
+        // Try to match
+        pollIntervalMatch = setInterval(tryMatch, 3000);
+      } else {
+        alert("Aquí iniciarías juego local");
+      }
+    });
+
+    async function updateLobby(){
+      const res = await fetch("/api/lobby");
+      const users = await res.json();
+      lobbyList.innerHTML = users.map(u => `<div>${u.username} (${u.scenario})</div>`).join("");
+    }
+
+    async function tryMatch(){
+      const res = await fetch("/api/match", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ username: myUsername, scenario: myScenario })
+      });
+      const data = await res.json();
+      if(data.status === "matched"){
+        myMatchUuid = data.uuid;
+        clearInterval(pollIntervalLobby);
+        clearInterval(pollIntervalMatch);
+        lobbyScreen.style.display = "none";
+        gameScreen.style.display = "block";
+        renderState(data.state);
+        // start polling state
+        pollIntervalMatch = setInterval(updateState, 3000);
+      }
+    }
+
+    async function updateState(){
+      if(!myMatchUuid) return;
+      const res = await fetch("/api/state?uuid=" + myMatchUuid);
+      if(res.ok){
+        const state = await res.json();
+        renderState(state);
+      }
+    }
+
+    function renderState(state){
+      gameStateDiv.textContent = JSON.stringify(state, null, 2);
+    }
+
+    endTurnBtn.addEventListener("click", async ()=>{
+      if(!myMatchUuid) return;
+      const res = await fetch("/api/state?uuid=" + myMatchUuid);
+      if(!res.ok) return;
+      const state = await res.json();
+      state.turn = (state.turn === 1 ? 2 : 1);
+      await fetch("/api/action", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ uuid: myMatchUuid, player: 1, actionType: "endTurn", payload: {}, newState: state })
+      });
+      renderState(state);
+    });
+  </script>
+</body>
+</html>
